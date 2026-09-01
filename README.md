@@ -13,11 +13,6 @@ address but not a radio (address-spoofing / beacon cloning), and characterise
 interference on the selected channel. **Receive only** — no transmit path exists
 in the software.
 
-> The carrier-frequency-offset fingerprint used here separates a replayed
-> (spoofed) advertising packet from the genuine device whose address it wears by
-> tens of ppm, with an empty gap between the two crystal modes. See the
-> accompanying paper (`paper/`) for a measured evaluation against an nRF52840.
-
 ---
 
 ## 1. Hardware requirements
