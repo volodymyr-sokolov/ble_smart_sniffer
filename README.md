@@ -6,6 +6,8 @@ real time, extracts physical-layer features from every packet, and shows them in
 a Wireshark-style GUI: scrolling packet list, per-packet detail tree, hex dump,
 plus live spectrum, feature, and angle-of-arrival plots.
 
+![Wireshark-style GUI](window.png)
+
 The purpose is **defensive**: identify transmitters that share an advertised
 address but not a radio (address-spoofing / beacon cloning), and characterise
 interference on the selected channel. **Receive only** — no transmit path exists
@@ -107,27 +109,7 @@ sessions (with an explicit non-simultaneity warning).
 
 ---
 
-## 3. Screenshots
-
-See [`screenshots/`](screenshots/) (`spectrum.png` and `interference.png` are
-included; `window.png` and `aoa.png` are produced by
-`python experiment/make_screenshots.py --dual` with the radio connected). The
-GUI is a dark, Wireshark-style layout:
-a live packet table (colour-coded by CRC and by spoofing alerts), an expandable
-per-packet detail tree showing every feature with its spec limit and baseline
-sigma, a hex dump, and a tabbed plot dock (spectrum/waterfall, CFO-vs-time,
-feature scatter, RSSI, per-packet eye diagram, angle-of-arrival, interference).
-
-| | |
-|---|---|
-| `window.png` | full application during a live capture |
-| `spectrum.png` | spectrum + waterfall of channel 37 with the BLE channel mask |
-| `aoa.png` | angle-of-arrival polar plot (dual-antenna) |
-| `interference.png` | interference monitor (noise floor, PDR vs RSSI, classifier) |
-
----
-
-## 4. How it works (calculation)
+## 3. How it works (calculation)
 
 Everything is vectorised: Python only ever touches whole arrays or short
 per-packet byte slices, never per-sample loops at 8 MSPS. The stages run in
