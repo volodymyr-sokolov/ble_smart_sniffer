@@ -119,40 +119,43 @@ and a lock-free shared-memory IQ ring.
 **Instantaneous frequency** of the GFSK signal, from the argument of the
 conjugate product:
 
-```
-f[n] = (fs / 2π) · arg( x[n+1] · conj(x[n]) )
-```
+$$
+ f[n] = \frac{f_s}{2\pi} \cdot \arg\big(x[n+1] \cdot x^*[n]\big)
+$$
 
 **Packet detection**: correlate the instantaneous frequency against the known
 preamble + access-address template (FFT overlap-save), recover symbol timing,
-de-whiten with the channel-seeded 7-bit LFSR (`x⁷+x⁴+1`), and check the BLE
-**CRC-24** (`x²⁴+x¹⁰+x⁹+x⁶+x⁴+x³+x+1`, init `0x555555`). Bluetooth Core
+de-whiten with the channel-seeded 7-bit LFSR ($$x^7 + x^4 + 1$$), and check the BLE
+**CRC-24** ($$x^{24} + x^{10} + x^9 + x^6 + x^4 + x^3 + x + 1$$, init `0x555555`). Bluetooth Core
 Specification, Vol. 6, Part B.
 
 **Receiver calibration** (removed before any transmitter feature, so receiver
 impairments are never attributed to the device) — DC offset plus Gram–Schmidt
 quadrature correction:
 
-```
-θ = E[iq] / E[i²]          (quadrature skew)
-q' = (q − θ·i) · sqrt( E[i²] / E[(q − θ·i)²] )   (gain-imbalance corrected)
-```
+$$
+\theta = \frac{\mathbb{E}[i \cdot q]}{\mathbb{E}[i^2]} \quad \text{(quadrature skew)}
+$$
+
+$$
+q' = (q - \theta \cdot i) \cdot \sqrt{\frac{\mathbb{E}[i^2]}{\mathbb{E}[(q - \theta \cdot i)^2]}} \quad \text{(gain-imbalance corrected)}
+$$
 
 **Carrier frequency offset** — the key fingerprint — as the mean residual after
 subtracting the ideal per-symbol deviation implied by the decoded bits:
 
-```
-Δf   = (1/K) Σ ( f_sym[k] − d·(2·b[k] − 1) )        [Hz]
-σ_Δf = std(residual) / sqrt(K)                       (< 2 ppm typical)
-Δf_ppm = 10⁶ · Δf / f_carrier
-```
+$$
+\begin{aligned}
+\Delta f &= \frac{1}{K} \sum_{k=1}^{K} \Big( f_{\text{sym}}[k] - d \cdot (2 \cdot b[k] - 1) \Big) && \text{[Hz]} \\
+\sigma_{\Delta f} &= \frac{\text{std}(\text{residual})}{\sqrt{K}} && \text{($< 2$ ppm typical)} \\
+\Delta f_{\text{ppm}} &= 10^6 \cdot \frac{\Delta f}{f_{\text{carrier}}} &&
+\end{aligned}
+$$
 
 **Spoofer detection** — two transmitters under one address form two CFO modes;
 the separation in pooled standard deviations is the alarm score:
 
-```
-S = |μ_spoof − μ_genuine| / sqrt( (σ_spoof² + σ_genuine²) / 2 )
-```
+$$S = \frac{|\mu_{\text{spoof}} - \mu_{\text{genuine}}|}{\sqrt{\frac{\sigma_{\text{spoof}}^2 + \sigma_{\text{genuine}}^2}{2}}}$$
 
 A per-feature bimodality test (`analysis.one_dimensional_split`) scans every
 feature for two populations, which is what catches a second radio that a
@@ -161,87 +164,14 @@ full-vector distance would dilute.
 **Angle of arrival** (dual-antenna), from the inter-antenna phase difference
 after removing the array's calibrated offset:
 
-```
-Δφ = arg( Σ x0[n]·conj(x1[n]) ) − φ_cal
-θ  = arcsin( Δφ / (2π · d/λ) )          (d = λ/2 assumed; half-plane only)
-```
-
-### Background reading
-
-- V. Brik et al., "Wireless device identification with radiometric signatures,"
-  *ACM MobiCom*, 2008 — RF fingerprinting foundations.
-- H. Givehchian et al., "Evaluating Physical-Layer BLE Location Tracking Attacks
-  on Mobile Devices," *IEEE S&P*, 2022 — BLE CFO fingerprint stability.
-- J.-L. Wu et al., "BlueShield: Detecting Spoofing Attacks in BLE Networks,"
-  *RAID*, 2020 — cyber-physical anomaly detection for BLE.
-- Bluetooth SIG, *Bluetooth Core Specification* v5.4, Vol. 6 Part B (Link Layer)
-  — whitening, CRC-24, advertising PDUs.
-
-A fuller feature list and the calibration procedure are in
-[`docs/ALGORITHMS.md`](docs/ALGORITHMS.md); a table of which features remain
-valid without a GPSDO is in the code (`sniffer/features.py`) and the paper.
-
-### Reproducing the paper
-
-```bash
-python experiment/run_experiment.py all     # calibrate, scan, replay (needs the nRF52840)
-python experiment/make_figures.py           # white-background result figures
-python experiment/make_scan_figures.py      # spectrum + interference figures
-cd experiment/paper && pdflatex spoofing.tex
-```
+$$
+\begin{aligned}
+\Delta\varphi &= \arg\left( \sum_{n} x_0[n] \cdot x_1^*[n] \right) - \varphi_{\text{cal}} \\
+\theta &= \arcsin\left( \frac{\Delta\varphi}{2\pi \cdot \frac{d}{\lambda}} \right) && \text{($d = \lambda/2$ assumed; half-plane only)}
+\end{aligned}
+$$
 
 ---
-
-## Layout
-
-```
-sniffer/          the library
-  channels.py     channel map, whitening LFSR, CRC-24, ChannelPlan consistency
-  libbladerf.py   ctypes binding to libbladeRF (receive-side entry points only)
-  radio.py        device setup, calibration, clocking, capture
-  shmring.py      lock-free shared-memory IQ ring
-  dsp.py          gate, correlation, demod, de-whitening, CRC, PDU parsing
-  features.py     per-packet feature extraction, one function per feature
-  analysis.py     clustering, baselines, anomaly scoring, interference monitor
-  calibration.py  receiver + antenna-array calibration and history
-  packet.py       the packet record
-  pipeline.py     the three processes, backpressure and stats
-  export.py       SigMF, PCAP, CSV/Parquet, offline multi-channel join
-  gui/            PyQt6 app: window, table model, plots, filter parser, dialogs
-tests/            synthetic-signal test suite (200+ tests, no hardware needed)
-main.py           CLI entry point
-docs/             algorithm notes
-screenshots/      GUI screenshots used by this README
-experiment/       reproducibility scripts + the IEEE paper
-  run_experiment.py, make_figures.py, make_scan_figures.py, make_screenshots.py
-  paper/          IEEE paper source (spoofing.tex) and built PDF
-  figures/        the figures the paper embeds
-```
-
-## What to upload to GitHub
-
-This folder **is** the upload set — every file in it is source, documentation, or
-a paper figure, and all of it is meant to be committed. Concretely, upload:
-
-- `sniffer/`, `tests/`, `main.py` — the tool and its test suite (source);
-- `README.md`, `LICENSE`, `requirements.txt`, `pytest.ini`, `.gitignore`, `docs/`;
-- `screenshots/` — the four PNGs this README links;
-- `experiment/` — the reproducibility scripts, `paper/spoofing.tex`,
-  `paper/spoofing.pdf`, and `figures/` (the plots the paper embeds).
-
-**Do not upload experimental result data — it is the tool's *output*, not
-source, and is regenerated by `experiment/run_experiment.py`.** The `.gitignore`
-already blocks all of it, so a normal `git add .` is safe; it excludes:
-
-- `experiment_results.json`, `experiment_results_summary.json` — measured run data;
-- `captures/`, `*.pcap`, `*.sigmf-*`, `*.parquet`, `*.csv`, `capture.json` — capture exports;
-- `calibration_history.json` — per-device calibration logs;
-- `__pycache__/`, `.pytest_cache/`, and LaTeX build products (`*.aux`, `*.log`, …).
-
-The `figures/` PNG/PDFs *are* kept: they are the published paper's figures, not
-raw data, and are needed to rebuild `spoofing.pdf`. If you would rather ship the
-paper as the PDF only, delete `experiment/figures/` and `experiment/paper/*.tex`
-and keep `spoofing.pdf`.
 
 ## Non-goals and ethics
 
